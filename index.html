@@ -620,6 +620,81 @@
         50%      { opacity:.35; transform:scale(.8); }
       }
 
+      /* ── Status Panel ─────────────────────────────────── */
+      @layer util {
+        .status-panel {
+          position: fixed;
+          bottom: calc(var(--tabbar-h) + var(--tabbar-safe) + var(--s2));
+          left: var(--s1);
+          right: var(--s1);
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: var(--r-lg);
+          padding: var(--s2) var(--s1);
+          box-shadow: var(--sh);
+          max-height: 48px;
+          overflow: hidden;
+          transition: max-height var(--dur) var(--ease);
+          z-index: 90;
+          cursor: pointer;
+        }
+        .status-panel.is-expanded { max-height: 360px; overflow-y: auto; }
+
+        @media (min-width: 768px) {
+          .status-panel {
+            position: static;
+            max-width: 640px;
+            margin: var(--s1) auto var(--s1);
+            bottom: auto; left: auto; right: auto;
+          }
+        }
+
+        .status-hd {
+          display: flex;
+          align-items: center;
+          gap: var(--s2);
+          user-select: none;
+          min-height: 24px;
+        }
+
+        .status-dot {
+          width: 8px; height: 8px;
+          border-radius: 50%;
+          background: var(--muted);
+          transition: background var(--dur);
+          flex-shrink: 0;
+        }
+        .status-dot.is-running {
+          background: var(--s-running);
+          animation: pulseA 1.2s ease-in-out infinite;
+        }
+
+        .status-label {
+          font-size: var(--f3);
+          font-weight: 600;
+          color: var(--text);
+          flex: 1;
+        }
+
+        .status-agent {
+          font-size: var(--f4);
+          color: var(--muted);
+          font-family: var(--sans);
+        }
+
+        .status-log {
+          margin-top: var(--s2);
+          font-size: var(--f4);
+          color: var(--text2);
+          line-height: 1.6;
+          border-top: 1px solid var(--border);
+          padding-top: var(--s2);
+          display: none;
+        }
+        .status-panel.is-expanded .status-log { display: block; }
+        .status-log-line { padding: 1px 0; }
+      }
+
       /* K12: prefers-reduced-motion — global one-liner */
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after {
@@ -833,6 +908,16 @@
       </div>
     </div>
   </main>
+
+  <!-- ══ Live Status Panel ══════════════════════════════ -->
+  <div id="status-panel" class="status-panel" aria-live="polite" aria-label="実行状況">
+    <div class="status-hd" id="status-hd">
+      <span class="status-dot" id="status-dot"></span>
+      <span class="status-label" id="status-label">待機中</span>
+      <span class="status-agent" id="status-agent"></span>
+    </div>
+    <div class="status-log" id="status-log" role="log" aria-label="実行ログ"></div>
+  </div>
 
   <!-- ══ Tab Bar（mobile） ══════════════════════════════ -->
   <nav class="tabbar" role="tablist" aria-label="ステータス切替">
@@ -1269,10 +1354,61 @@
       });
     }
 
+    // ── Status panel ─────────────────────────────────────────
+    async function loadStatus() {
+      const cfg = loadSettings();
+      if (!cfg.token) return;
+      try {
+        const { content: status } = await ghGet('status.json', cfg.token, cfg.owner, cfg.repo);
+        renderStatus(status);
+      } catch { /* silent — status is best-effort */ }
+    }
+
+    function renderStatus(status) {
+      const dot   = document.getElementById('status-dot');
+      const label = document.getElementById('status-label');
+      const agent = document.getElementById('status-agent');
+      const log   = document.getElementById('status-log');
+
+      if (status.running) {
+        dot.classList.add('is-running');
+        label.textContent = status.task_title ? `実行中: ${status.task_title}` : '実行中...';
+        agent.textContent = status.agent ? `[${status.agent}]` : '';
+        if (!document.getElementById('status-panel').classList.contains('is-expanded')) {
+          document.getElementById('status-panel').classList.add('is-expanded');
+        }
+      } else {
+        dot.classList.remove('is-running');
+        if (status.last_status === 'completed') {
+          label.textContent = `完了: ${status.last_task_id || '—'}`;
+        } else if (status.last_status === 'waiting_approval') {
+          label.textContent = '承認待ち ⚠️';
+        } else if (status.last_status === 'failed') {
+          label.textContent = '失敗 ❌';
+        } else {
+          label.textContent = '待機中';
+        }
+        agent.textContent = status.last_completed_at ? formatDate(status.last_completed_at) : '';
+      }
+
+      if (status.log && status.log.length > 0) {
+        log.innerHTML = status.log
+          .slice(-20)
+          .map(line => `<div class="status-log-line">${escHtml(line)}</div>`)
+          .join('');
+        log.scrollTop = log.scrollHeight;
+      }
+    }
+
+    document.getElementById('status-hd').addEventListener('click', () => {
+      document.getElementById('status-panel').classList.toggle('is-expanded');
+    });
+
     // ── Auto-polling ─────────────────────────────────────────
-    // Initial load
     document.addEventListener('DOMContentLoaded', () => {
       loadBoard();
+      loadStatus();
+      setInterval(loadStatus, 5_000);
     });
 
     // Refresh board every 30 seconds
