@@ -1,0 +1,13 @@
+{
+  "running": false,
+  "task_id": null,
+  "task_title": null,
+  "agent": null,
+  "step": null,
+  "started_at": null,
+  "log": [],
+  "updated_at": null,
+  "last_completed_at": null,
+  "last_task_id": null,
+  "last_status": null
+}
