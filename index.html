@@ -3,322 +3,429 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Claude Task Manager</title>
+  <meta name="description" content="Claude Code にタスクを委ねるタスク管理アプリ" />
+  <title>Task Manager | Claude Code</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&family=Noto+Sans+JP:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&family=Noto+Sans+JP:wght@400;500;600&display=swap&display=swap" rel="stylesheet" />
 
   <style>
-    @layer reset, tokens, base, layout, components, animation, utilities;
+    @layer reset, tokens, base, header, tabs, board, card, modal, fab, util, motion;
 
+    /* ── Reset ────────────────────────────────────────── */
     @layer reset {
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       button { cursor: pointer; border: none; background: none; font: inherit; }
+      ul { list-style: none; }
     }
 
+    /* ── Tokens ───────────────────────────────────────── */
     @layer tokens {
       :root {
-        --brand:        #1E0A3C;
-        --brand-mid:    #3D1278;
-        --accent:       #6B21A8;
-        --accent-h:     #4C1A82;
-        --accent-soft:  color-mix(in oklch, #6B21A8, white 90%);
-        --accent-glow:  color-mix(in oklch, #6B21A8, transparent 80%);
+        --brand:      #1E0A3C;
+        --brand-mid:  #3D1278;
+        --accent:     #6B21A8;
+        --accent-h:   #4C1A82;
+        --accent-s:   color-mix(in oklch,#6B21A8,white 90%);
+        --accent-g:   color-mix(in oklch,#6B21A8,transparent 80%);
 
-        --bg:           #F7F6FF;
-        --surface:      #FFFFFF;
-        --surface-2:    color-mix(in oklch, #6B21A8, white 96%);
+        --bg:         #F7F6FF;
+        --surface:    #FFFFFF;
+        --surface2:   color-mix(in oklch,#6B21A8,white 96%);
+        --text:       #0E0620;
+        --text2:      #3D2B5C;
+        --muted:      #7B6B9A;
+        --border:     color-mix(in oklch,#6B21A8,white 80%);
 
-        --text:         #0E0620;
-        --text-2:       #3D2B5C;
-        --text-muted:   #7B6B9A;
-        --border:       color-mix(in oklch, #6B21A8, white 80%);
+        /* Status */
+        --s-pending:   #6B21A8;
+        --s-analyzing: #D97706;
+        --s-approval:  #DC2626;
+        --s-running:   #2563EB;
+        --s-done:      #059669;
 
-        --risk-h-bg:  #FEF2F2; --risk-h-fg: #B91C1C;
-        --risk-m-bg:  #FFFBEB; --risk-m-fg: #B45309;
-        --risk-l-bg:  #F0FDF4; --risk-l-fg: #047857;
+        /* Column bg */
+        --cb-pending:   color-mix(in oklch,#6B21A8,white 95%);
+        --cb-analyzing: color-mix(in oklch,#D97706,white 95%);
+        --cb-approval:  color-mix(in oklch,#DC2626,white 95%);
+        --cb-running:   color-mix(in oklch,#2563EB,white 95%);
+        --cb-done:      color-mix(in oklch,#059669,white 96%);
 
-        --sh-card:  0 1px 3px color-mix(in oklch,#1E0A3C,transparent 90%),
-                    0 4px 20px color-mix(in oklch,#1E0A3C,transparent 94%);
-        --sh-lift:  0 4px 12px color-mix(in oklch,#1E0A3C,transparent 82%),
-                    0 12px 40px color-mix(in oklch,#1E0A3C,transparent 88%);
-        --sh-modal: 0 24px 80px color-mix(in oklch,#1E0A3C,transparent 65%);
+        /* Shadows — purple-tinted */
+        --sh:    0 1px 3px color-mix(in oklch,#1E0A3C,transparent 90%),
+                 0 4px 16px color-mix(in oklch,#1E0A3C,transparent 94%);
+        --sh-h:  0 4px 12px color-mix(in oklch,#1E0A3C,transparent 82%),
+                 0 12px 40px color-mix(in oklch,#1E0A3C,transparent 88%);
+        --sh-m:  0 20px 72px color-mix(in oklch,#1E0A3C,transparent 65%);
 
-        --r-sm: 4px; --r-md: 6px; --r-lg: 10px; --r-xl: 14px;
+        /* Radius — intentional variation */
+        --r-xs: 3px;
+        --r-sm: 5px;
+        --r-md: 8px;
+        --r-lg: 12px;
+        --r-xl: 20px;
 
-        --f-serif: 'Noto Serif JP', Georgia, serif;
-        --f-sans:  'Noto Sans JP', system-ui, sans-serif;
+        /* Type */
+        --serif: 'Noto Serif JP', ui-serif, serif;
+        --sans:  'Noto Sans JP', ui-sans-serif, system-ui, sans-serif;
 
-        --sp-2xs: clamp(.25rem,.2rem + .15vw,.375rem);
-        --sp-xs:  clamp(.5rem, .4rem + .25vw,.75rem);
-        --sp-sm:  clamp(.75rem,.6rem + .5vw, 1.125rem);
-        --sp-md:  clamp(1.5rem,1.2rem + 1vw, 2.25rem);
-        --sp-lg:  clamp(2.5rem,2rem + 2vw,  4rem);
+        /* Fluid spacing */
+        --s3: clamp(.25rem,.2rem + .15vw,.375rem);
+        --s2: clamp(.5rem, .4rem + .25vw,.75rem);
+        --s1: clamp(.875rem,.75rem + .4vw,1.125rem);
+        --s0: clamp(1.5rem,1.2rem + .9vw,2rem);
+        --sm: clamp(2.5rem,2rem + 1.5vw,3.5rem);
 
-        --fs-2xs: clamp(.65rem,.6rem + .1vw, .72rem);
-        --fs-xs:  clamp(.75rem,.7rem + .15vw,.85rem);
-        --fs-sm:  clamp(.85rem,.8rem + .2vw, .95rem);
-        --fs-md:  clamp(1rem,  .9rem + .35vw,1.15rem);
-        --fs-lg:  clamp(1.2rem,1rem + .75vw, 1.6rem);
-        --fs-xl:  clamp(1.8rem,1.2rem + 2vw, 2.8rem);
-        --fs-2xl: clamp(2.4rem,1.6rem + 3vw, 4rem);
+        /* Fluid font */
+        --f4: clamp(.65rem,.62rem + .1vw, .72rem);
+        --f3: clamp(.78rem,.74rem + .15vw,.86rem);
+        --f2: clamp(.9rem, .85rem + .2vw, 1rem);
+        --f1: clamp(1.05rem,1rem + .3vw,1.2rem);
+        --f0: clamp(1.3rem,1.1rem + .8vw,1.7rem);
+        --fh: clamp(1.9rem,1.3rem + 2.2vw,3rem);
 
         --ease: cubic-bezier(.22,1,.36,1);
-        --dur:  220ms;
+        --dur:  200ms;
+
+        /* Tab bar height (mobile) */
+        --tabbar-h: 64px;
+        --tabbar-safe: env(safe-area-inset-bottom, 0px);
       }
     }
 
+    /* ── Base ─────────────────────────────────────────── */
     @layer base {
-      html { color-scheme: light; scroll-behavior: smooth; }
+      html { color-scheme: light; }
       body {
-        font-family: var(--f-sans);
+        font-family: var(--sans);
         background: var(--bg);
         color: var(--text);
         line-height: 1.8;
         min-height: 100dvh;
         overflow-x: hidden;
       }
+      /* Skip link (K12) */
+      .skip { position:absolute; top:-100%; left:1rem; background:var(--accent); color:#fff;
+               padding:.75rem 1.5rem; border-radius:var(--r-sm); font-weight:600;
+               text-decoration:none; z-index:9999; }
+      .skip:focus { top:1rem; }
+      /* Focus visible (K12) */
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      :focus:not(:focus-visible) { outline: none; }
     }
 
-    @layer layout {
-      /* ── Hero Header ── */
+    /* ── Hero Header ──────────────────────────────────── */
+    @layer header {
       .hero {
         background: var(--brand);
         position: relative;
         overflow: hidden;
-        padding: var(--sp-lg) var(--sp-md) var(--sp-md);
+        padding: var(--s0) var(--s1) var(--s1);
       }
-
-      /* Q9: 極細グリッドパターン背景（幾何学・AI Generic禁止のオーロラ/ブロブなし） */
+      /* Q9: Geometric grid pattern */
       .hero::before {
         content: '';
-        position: absolute;
-        inset: 0;
+        position: absolute; inset: 0;
         background-image:
-          linear-gradient(color-mix(in oklch,#6B21A8,transparent 88%) 1px, transparent 1px),
-          linear-gradient(90deg, color-mix(in oklch,#6B21A8,transparent 88%) 1px, transparent 1px);
-        background-size: 48px 48px;
+          linear-gradient(color-mix(in oklch,#6B21A8,transparent 86%) 1px, transparent 1px),
+          linear-gradient(90deg,color-mix(in oklch,#6B21A8,transparent 86%) 1px, transparent 1px);
+        background-size: 44px 44px;
         pointer-events: none;
       }
-      /* 下部フェード */
       .hero::after {
         content: '';
-        position: absolute;
-        bottom: 0; left: 0; right: 0;
-        height: 60%;
-        background: linear-gradient(to bottom, transparent, var(--brand));
+        position: absolute; bottom:0; left:0; right:0; height:55%;
+        background: linear-gradient(to bottom,transparent,var(--brand));
         pointer-events: none;
       }
-
       .hero__inner {
-        position: relative;
-        z-index: 1;
-        max-width: 1440px;
-        margin: 0 auto;
-        /* 非対称: 左寄せテキスト、右にボタン */
+        position: relative; z-index: 1;
+        max-width: 1440px; margin: 0 auto;
         display: flex;
         align-items: flex-end;
         justify-content: space-between;
-        gap: var(--sp-md);
-        flex-wrap: wrap;
+        gap: var(--s1); flex-wrap: wrap;
       }
-
       .hero__copy { flex: 1; min-width: 0; }
-
       .hero__eyebrow {
-        font-family: var(--f-sans);
-        font-size: var(--fs-2xs);
-        font-weight: 600;
-        letter-spacing: .14em;
-        text-transform: uppercase;
-        color: color-mix(in oklch, #6B21A8, white 55%);
-        display: block;
-        margin-bottom: var(--sp-xs);
+        font-size: var(--f4); font-weight: 600; font-family: var(--sans);
+        letter-spacing: .14em; text-transform: uppercase;
+        color: color-mix(in oklch,#A78BFA,transparent 30%);
+        display: block; margin-bottom: var(--s2);
       }
-
-      /* Q8: テキストマスク表示アニメーション（高級演出） */
+      /* Q8: clip-path text reveal */
       .hero__title {
-        font-family: var(--f-serif);
-        font-size: var(--fs-2xl);
-        font-weight: 700;
-        color: #fff;
-        letter-spacing: .025em;
-        line-height: 1.15;
+        font-family: var(--serif); font-size: var(--fh);
+        font-weight: 700; color: #fff; letter-spacing: .02em; line-height: 1.1;
         clip-path: inset(0 100% 0 0);
-        animation: titleReveal .9s var(--ease) .1s forwards;
+        animation: titleReveal .85s var(--ease) .05s forwards;
       }
-      @keyframes titleReveal {
-        to { clip-path: inset(0 0% 0 0); }
-      }
-
+      @keyframes titleReveal { to { clip-path: inset(0 0% 0 0); } }
       .hero__sub {
-        font-family: var(--f-sans);
-        font-size: var(--fs-sm);
-        color: color-mix(in oklch, white, transparent 40%);
-        margin-top: var(--sp-xs);
-        opacity: 0;
-        animation: fadeIn .6s var(--ease) .7s forwards;
+        font-size: var(--f3); font-family: var(--sans);
+        color: color-mix(in oklch,white,transparent 45%);
+        margin-top: var(--s2);
+        opacity: 0; animation: fadeUp .5s var(--ease) .65s forwards;
       }
-
       .hero__stats {
-        display: flex;
-        gap: var(--sp-sm);
-        margin-top: var(--sp-sm);
-        flex-wrap: wrap;
-        opacity: 0;
-        animation: fadeIn .6s var(--ease) .9s forwards;
+        display: flex; gap: var(--s1); flex-wrap: wrap; margin-top: var(--s1);
+        opacity: 0; animation: fadeUp .5s var(--ease) .8s forwards;
       }
       .stat {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        font-size: var(--fs-xs);
-        font-family: var(--f-sans);
-        color: color-mix(in oklch, white, transparent 30%);
+        display: flex; align-items: center; gap: 5px;
+        font-size: var(--f4); font-family: var(--sans);
+        color: color-mix(in oklch,white,transparent 35%);
       }
-      .stat__dot {
-        width: 6px; height: 6px;
-        border-radius: 50%;
-        flex-shrink: 0;
-      }
-
+      .stat__d { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
       .hero__action {
-        opacity: 0;
-        animation: fadeIn .6s var(--ease) 1s forwards;
+        opacity:0; animation: fadeUp .5s var(--ease) .95s forwards;
         align-self: flex-end;
       }
-
-      /* ── Board ── */
-      .board-scroll {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        padding: var(--sp-md);
+      /* Add button — desktop */
+      .btn-add-hd {
+        font-family: var(--sans); font-size: var(--f2); font-weight: 600;
+        color: var(--brand); background: #fff;
+        border-radius: var(--r-sm); padding: 11px 26px;
+        min-height: 48px;
+        transition: background var(--dur), box-shadow var(--dur), transform var(--dur);
+        white-space: nowrap;
       }
-      .board-scroll::-webkit-scrollbar { height: 3px; }
-      .board-scroll::-webkit-scrollbar-thumb {
-        background: var(--accent);
-        border-radius: 2px;
+      .btn-add-hd:hover {
+        background: var(--accent-s);
+        box-shadow: 0 4px 16px rgba(107,33,168,.25);
+        transform: translateY(-1px);
       }
+      .btn-add-hd:active { transform: scale(.98); }
+      /* Hide add button in header on mobile (FAB is used) */
+      @media (max-width: 767px) { .hero__action { display: none; } }
+    }
 
-      .board {
+    /* ── Tab Bar — mobile Kanban navigation ──────────── */
+    @layer tabs {
+      .tabbar {
+        display: none; /* shown on mobile */
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        height: calc(var(--tabbar-h) + var(--tabbar-safe));
+        padding-bottom: var(--tabbar-safe);
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        box-shadow: 0 -4px 20px color-mix(in oklch,#1E0A3C,transparent 88%);
+        z-index: 30;
+      }
+      .tabbar__inner {
         display: flex;
-        gap: var(--sp-sm);
-        min-width: 1100px;
-        max-width: 1440px;
-        margin: 0 auto;
-        align-items: flex-start;
+        height: var(--tabbar-h);
+        align-items: stretch;
       }
-
-      .col {
+      .tab-btn {
         flex: 1;
-        min-width: 200px;
-        border-radius: var(--r-lg);
-        padding: var(--sp-sm);
-        display: flex;
-        flex-direction: column;
-        gap: var(--sp-xs);
-        container-type: inline-size;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 3px;
+        min-height: 48px; /* K12: touch target */
+        padding: 6px 4px;
+        font-family: var(--sans); font-size: var(--f4); font-weight: 500;
+        color: var(--muted);
+        border-bottom: 2px solid transparent;
+        transition: color var(--dur), border-color var(--dur), background var(--dur);
+        position: relative;
       }
-      .col--pending   { background: color-mix(in oklch,#6B21A8,white 95%); }
-      .col--analyzing { background: color-mix(in oklch,#D97706,white 95%); }
-      .col--approval  { background: color-mix(in oklch,#DC2626,white 95%); }
-      .col--running   { background: color-mix(in oklch,#2563EB,white 95%); }
-      .col--done      { background: color-mix(in oklch,#059669,white 96%); }
+      .tab-btn[aria-selected="true"] {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+        background: color-mix(in oklch,#6B21A8,transparent 94%);
+      }
+      .tab-btn__dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+      .tab-btn__count {
+        position: absolute; top: 7px; right: 30%;
+        background: var(--accent); color:#fff;
+        font-size: 9px; font-weight: 700;
+        min-width: 15px; height: 15px;
+        border-radius: 8px; padding: 0 3px;
+        display: flex; align-items: center; justify-content: center;
+        line-height: 1;
+      }
+      .tab-btn[aria-selected="false"] .tab-btn__count { background: var(--muted); }
 
-      .col__hd {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-        padding-bottom: var(--sp-xs);
-        border-bottom: 1px solid var(--border);
-        margin-bottom: 2px;
+      @media (max-width: 767px) { .tabbar { display: block; } }
+    }
+
+    /* ── Board ────────────────────────────────────────── */
+    @layer board {
+      /* Mobile: single column, padding for tab bar */
+      .board-wrap {
+        padding: var(--s1);
+        padding-bottom: calc(var(--s1) + var(--tabbar-h) + var(--tabbar-safe) + 80px); /* space for FAB */
       }
-      .col__dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+      .col { display: none; } /* mobile: hidden by default */
+      .col.is-active { display: flex; flex-direction: column; gap: var(--s2); }
+
+      /* Desktop: horizontal Kanban */
+      @media (min-width: 768px) {
+        .board-wrap {
+          overflow-x: auto;
+          padding-bottom: var(--s1);
+          -webkit-overflow-scrolling: touch;
+        }
+        .board-wrap::-webkit-scrollbar { height: 3px; }
+        .board-wrap::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 2px; }
+        .board-inner {
+          display: flex; gap: var(--s2);
+          min-width: 1050px; max-width: 1440px; margin: 0 auto;
+          align-items: flex-start;
+        }
+        .col {
+          display: flex !important; /* override mobile hide */
+          flex: 1; min-width: 196px;
+          flex-direction: column; gap: var(--s2);
+          border-radius: var(--r-lg); padding: var(--s1);
+        }
+        .col--pending   { background: var(--cb-pending); }
+        .col--analyzing { background: var(--cb-analyzing); }
+        .col--approval  { background: var(--cb-approval); }
+        .col--running   { background: var(--cb-running); }
+        .col--done      { background: var(--cb-done); }
+      }
+
+      /* Column header */
+      .col__hd {
+        display: flex; align-items: center; gap: 6px;
+        padding-bottom: var(--s2); border-bottom: 1px solid var(--border);
+        /* Mobile: show as section header */
+      }
+      @media (max-width: 767px) {
+        .col__hd {
+          position: sticky; top: 0; z-index: 10;
+          background: var(--bg);
+          padding: var(--s2) var(--s2) var(--s2);
+          margin: calc(-1 * var(--s1)) calc(-1 * var(--s1)) 0;
+          border-radius: 0; border-bottom: 1px solid var(--border);
+        }
+      }
+      .col__dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
       .col__label {
-        font-family: var(--f-sans);
-        font-size: var(--fs-2xs);
-        font-weight: 600;
-        letter-spacing: .1em;
-        text-transform: uppercase;
+        font-family: var(--sans); font-size: var(--f4);
+        font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
       }
       .col__n {
-        margin-left: auto;
-        font-size: var(--fs-2xs);
-        font-weight: 600;
-        font-family: var(--f-sans);
-        color: var(--text-muted);
-        background: var(--surface);
-        border-radius: var(--r-sm);
-        padding: 1px 6px;
+        margin-left: auto; font-size: var(--f4); font-weight: 700;
+        font-family: var(--sans); color: var(--muted);
+        background: var(--surface); border-radius: var(--r-xs);
+        padding: 1px 7px;
       }
     }
 
-    @layer components {
-      /* ── Task Card ── */
+    /* ── Card ─────────────────────────────────────────── */
+    @layer card {
       .card {
         background: var(--surface);
         border-radius: var(--r-md);
-        padding: var(--sp-sm);
-        box-shadow: var(--sh-card);
+        /* Generous padding — スカスカ×高級 */
+        padding: var(--s1);
+        box-shadow: var(--sh);
         border: 1px solid var(--border);
         border-left: 3px solid var(--border);
         cursor: pointer;
         transform-style: preserve-3d;
-        /* Q5: hover は JS で 3D tilt + shadow強化 */
         transition:
           box-shadow var(--dur) var(--ease),
           transform var(--dur) var(--ease),
           border-left-color var(--dur) var(--ease);
         will-change: transform;
       }
+      /* Risk left border */
+      .card--H { border-left-color: var(--s-approval); }
+      .card--M { border-left-color: var(--s-analyzing); }
+      .card--L { border-left-color: var(--s-done); }
+      .card--done { border-left-color: var(--border); }
+
+      /* Focus (K12) */
       .card:focus-visible {
         outline: 2px solid var(--accent);
-        outline-offset: 2px;
+        outline-offset: 3px;
       }
-      .card--high   { border-left-color: #DC2626; }
-      .card--medium { border-left-color: #D97706; }
-      .card--low    { border-left-color: #059669; }
 
+      /* Card sections */
       .card__meta {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        margin-bottom: 8px;
-        flex-wrap: wrap;
+        display: flex; align-items: center; gap: 6px;
+        margin-bottom: var(--s2); flex-wrap: wrap;
       }
+      /* Title — Noto Serif JP, prominent */
       .card__title {
-        font-family: var(--f-serif);
-        font-size: var(--fs-md);
+        font-family: var(--serif);
+        font-size: var(--f1);
         font-weight: 700;
         line-height: 1.55;
         color: var(--text);
-        margin-bottom: var(--sp-xs);
+        margin-bottom: var(--s2);
+        letter-spacing: .01em;
       }
-      .card--done .card__title { color: var(--text-muted); }
+      .card--done .card__title { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
 
+      .card__foot {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-top: var(--s3); gap: var(--s2);
+      }
       .card__skill {
-        font-size: var(--fs-xs);
-        color: var(--accent);
-        font-family: var(--f-sans);
+        font-size: var(--f4); color: var(--accent); font-family: var(--sans);
+        display: flex; align-items: center; gap: 3px;
       }
       .card__skill--new { color: #BE185D; }
-      .card__time {
-        font-size: var(--fs-2xs);
-        color: var(--text-muted);
-        font-family: var(--f-sans);
-        margin-top: var(--sp-2xs);
+      .card__skill--done { color: var(--s-done); }
+      .card__time { font-size: var(--f4); color: var(--muted); font-family: var(--sans); }
+
+      /* Status box */
+      .sbox {
+        border-radius: var(--r-xs); padding: 8px 12px;
+        font-size: var(--f3); font-family: var(--sans); line-height: 1.5;
+        margin-top: var(--s2);
+      }
+      .sbox-warn { background: color-mix(in oklch,#DC2626,white 90%); color: #991B1B; }
+      .sbox-info { background: color-mix(in oklch,#2563EB,white 90%); color: #1E40AF; }
+      .sbox-scan { background: color-mix(in oklch,#D97706,white 90%); color: #92400E; }
+
+      /* Progress bars */
+      .pbar { height: 2px; border-radius: 1px; margin-top: 10px; overflow: hidden; }
+      .pbar--scan { background: color-mix(in oklch,#D97706,white 75%); }
+      .pbar--run  { background: color-mix(in oklch,#2563EB,white 75%); }
+      .pbar__f { height: 100%; border-radius: 1px; }
+      .pbar__f--scan { background: var(--s-analyzing); animation: scan 2s var(--ease) infinite alternate; }
+      .pbar__f--run  { background: var(--s-running); width: 72%; }
+      @keyframes scan { from{width:15%} to{width:88%} }
+
+      /* Approval actions — K12: 48px min on mobile */
+      .appr {
+        display: flex; gap: var(--s2); margin-top: var(--s1);
+      }
+      .btn-rej {
+        font-family: var(--sans); font-size: var(--f3); font-weight: 600;
+        padding: 10px 16px; border-radius: var(--r-sm);
+        min-height: 48px;
+        background: color-mix(in oklch,#DC2626,white 88%);
+        color: #991B1B;
+        border: 1px solid color-mix(in oklch,#DC2626,white 75%);
+        transition: background var(--dur), transform var(--dur);
+      }
+      .btn-rej:hover { background: color-mix(in oklch,#DC2626,white 78%); transform:translateY(-1px); }
+      .btn-apv {
+        flex: 1;
+        font-family: var(--sans); font-size: var(--f3); font-weight: 600;
+        padding: 10px 16px; border-radius: var(--r-sm);
+        min-height: 48px;
+        background: var(--s-approval); color: #fff;
+        transition: background var(--dur), box-shadow var(--dur), transform var(--dur);
+      }
+      .btn-apv:hover {
+        background: #B91C1C;
+        box-shadow: 0 3px 12px rgba(220,38,38,.35);
+        transform: translateY(-1px);
       }
 
-      /* Badge */
+      /* Badges */
       .badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 1px 8px;
-        border-radius: var(--r-sm);
-        font-size: var(--fs-2xs);
-        font-weight: 500;
-        font-family: var(--f-sans);
-        letter-spacing: .02em;
+        display: inline-flex; align-items: center;
+        padding: 2px 8px; border-radius: var(--r-xs);
+        font-size: var(--f4); font-weight: 500; font-family: var(--sans);
       }
       .ba { background:color-mix(in oklch,#6B21A8,white 87%); color:#4C1A82; }
       .bd { background:color-mix(in oklch,#2563EB,white 87%); color:#1D4ED8; }
@@ -327,200 +434,124 @@
       .br { background:color-mix(in oklch,#D97706,white 87%); color:#92400E; }
 
       .risk {
-        font-size: var(--fs-2xs);
-        font-weight: 500;
-        font-family: var(--f-sans);
-        padding: 1px 6px;
-        border-radius: var(--r-sm);
+        font-size: var(--f4); font-weight: 600; font-family: var(--sans);
+        padding: 2px 7px; border-radius: var(--r-xs);
+        letter-spacing: .04em;
       }
-      .rh { background: var(--risk-h-bg); color: var(--risk-h-fg); }
-      .rm { background: var(--risk-m-bg); color: var(--risk-m-fg); }
-      .rl { background: var(--risk-l-bg); color: var(--risk-l-fg); }
+      .rH { background: color-mix(in oklch,#DC2626,white 88%); color: var(--s-approval); }
+      .rM { background: color-mix(in oklch,#D97706,white 88%); color: var(--s-analyzing); }
+      .rL { background: color-mix(in oklch,#059669,white 88%); color: var(--s-done); }
+    }
 
-      /* Status box */
-      .sbox {
-        border-radius: var(--r-sm);
-        padding: 7px 10px;
-        margin-top: 8px;
-        font-size: var(--fs-xs);
-        font-family: var(--f-sans);
-        line-height: 1.5;
-      }
-      .sbox-a { background: var(--risk-h-bg); color: #991B1B; }
-      .sbox-i { background: color-mix(in oklch,#2563EB,white 90%); color: #1E40AF; }
-      .sbox-w { background: color-mix(in oklch,#D97706,white 90%); color: #92400E; }
-
-      /* Bars */
-      .pbar { height: 2px; border-radius: 1px; margin-top: 10px; overflow: hidden; }
-      .pbar--a { background: color-mix(in oklch,#D97706,white 75%); }
-      .pbar__fill { height: 100%; border-radius: 1px; }
-      .pbar__fill--a {
-        background: #D97706;
-        animation: scan 2s var(--ease) infinite alternate;
-      }
-      .pbar--r { background: color-mix(in oklch,#2563EB,white 75%); }
-      .pbar__fill--r { background: #2563EB; width: 72%; }
-
-      @keyframes scan {
-        from { width: 15%; }
-        to   { width: 88%; }
-      }
-
-      /* Approval */
-      .appr-btns { display: flex; gap: var(--sp-xs); margin-top: var(--sp-xs); }
-      .btn-rej {
-        font-family: var(--f-sans); font-size: var(--fs-xs); font-weight: 600;
-        padding: 6px 12px; border-radius: var(--r-sm);
-        background: color-mix(in oklch,#DC2626,white 88%);
-        color: #991B1B;
-        border: 1px solid color-mix(in oklch,#DC2626,white 75%);
-        transition: background var(--dur), transform var(--dur);
-        min-height: 36px;
-      }
-      .btn-rej:hover { background: color-mix(in oklch,#DC2626,white 78%); transform: translateY(-1px); }
-      .btn-apv {
-        flex: 1;
-        font-family: var(--f-sans); font-size: var(--fs-xs); font-weight: 600;
-        padding: 6px 14px; border-radius: var(--r-sm);
-        background: #DC2626; color: #fff;
-        transition: background var(--dur), box-shadow var(--dur), transform var(--dur);
-        min-height: 36px;
-      }
-      .btn-apv:hover {
-        background: #B91C1C;
-        box-shadow: 0 3px 12px rgba(220,38,38,.35);
-        transform: translateY(-1px);
-      }
-
-      /* ── Add Button ── */
-      .btn-add {
-        font-family: var(--f-sans);
-        font-size: var(--fs-sm);
-        font-weight: 600;
-        color: var(--brand);
-        background: #fff;
-        border-radius: var(--r-sm);
-        padding: 10px 24px;
-        letter-spacing: .02em;
-        transition: background var(--dur), box-shadow var(--dur), transform var(--dur);
-        min-height: 44px;
-        white-space: nowrap;
-      }
-      .btn-add:hover {
-        background: var(--accent-soft);
-        box-shadow: 0 4px 16px rgba(107,33,168,.25);
-        transform: translateY(-1px);
-      }
-      .btn-add:active { transform: scale(.98); }
-
-      /* ── Modal ── */
+    /* ── Modal ────────────────────────────────────────── */
+    @layer modal {
       .overlay {
         position: fixed; inset: 0; z-index: 50;
-        background: color-mix(in oklch, #1E0A3C, transparent 40%);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        background: color-mix(in oklch,#1E0A3C,transparent 42%);
         display: flex; align-items: center; justify-content: center;
-        padding: var(--sp-sm);
+        padding: var(--s1);
+        /* K19: backdrop-filter only on modal (1 place), with fallback */
       }
       .overlay[hidden] { display: none; }
-
+      @supports (backdrop-filter: blur(8px)) {
+        .overlay { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+      }
+      /* Mobile: sheet from bottom */
+      @media (max-width: 767px) {
+        .overlay { align-items: flex-end; padding: 0; }
+        .modal {
+          border-bottom-left-radius: 0 !important;
+          border-bottom-right-radius: 0 !important;
+          padding-bottom: calc(var(--s0) + env(safe-area-inset-bottom, 0px)) !important;
+          max-height: 95dvh;
+          overflow-y: auto;
+        }
+      }
       .modal {
-        background: var(--surface);
-        border-radius: var(--r-xl);
-        padding: var(--sp-md);
-        width: 100%; max-width: 500px;
-        box-shadow: var(--sh-modal);
-        border: 1px solid var(--border);
+        background: var(--surface); border-radius: var(--r-xl);
+        padding: var(--s0); width: 100%; max-width: 500px;
+        box-shadow: var(--sh-m); border: 1px solid var(--border);
         animation: modalIn var(--dur) var(--ease) both;
       }
       @keyframes modalIn {
-        from { opacity: 0; transform: scale(.96) translateY(8px); }
-        to   { opacity: 1; transform: scale(1)  translateY(0); }
+        from { opacity:0; transform: scale(.97) translateY(10px); }
+        to   { opacity:1; transform: scale(1)   translateY(0); }
       }
-
+      @media (max-width:767px) {
+        @keyframes modalIn {
+          from { opacity:0; transform: translateY(100%); }
+          to   { opacity:1; transform: translateY(0); }
+        }
+      }
+      .modal__drag {
+        width: 36px; height: 4px; border-radius: 2px;
+        background: var(--border); margin: 0 auto var(--s1);
+        display: none;
+      }
+      @media (max-width: 767px) { .modal__drag { display: block; } }
       .modal__title {
-        font-family: var(--f-serif);
-        font-size: var(--fs-lg);
-        font-weight: 700;
-        color: var(--text);
-        margin-bottom: var(--sp-md);
-        letter-spacing: .03em;
+        font-family: var(--serif); font-size: var(--f0); font-weight: 700;
+        color: var(--text); margin-bottom: var(--s1); letter-spacing: .02em;
       }
-
-      .fg { margin-bottom: var(--sp-sm); }
+      /* Form */
+      .fg { margin-bottom: var(--s1); }
       .fl {
-        display: block;
-        font-size: var(--fs-2xs);
-        font-weight: 600;
-        color: var(--accent);
-        font-family: var(--f-sans);
-        letter-spacing: .09em;
-        text-transform: uppercase;
-        margin-bottom: 5px;
+        display: block; font-size: var(--f4); font-weight: 700;
+        color: var(--accent); font-family: var(--sans);
+        letter-spacing: .09em; text-transform: uppercase; margin-bottom: 5px;
       }
       .fi {
         width: 100%;
-        background: var(--surface-2);
-        border: 1.5px solid var(--border);
+        background: var(--surface2); border: 1.5px solid var(--border);
         border-radius: var(--r-sm);
-        padding: 10px 14px;
-        font-family: var(--f-sans);
-        font-size: var(--fs-sm);
-        color: var(--text);
+        padding: 12px 14px; /* generous */
+        font-family: var(--sans); font-size: var(--f2); color: var(--text);
         line-height: 1.7;
+        min-height: 48px; /* K12: touch target */
         transition: border-color var(--dur), box-shadow var(--dur);
         -webkit-appearance: none;
       }
       .fi:focus {
-        outline: none;
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px var(--accent-glow);
+        outline: none; border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-g);
       }
-      .fi::placeholder { color: var(--text-muted); }
-      textarea.fi { resize: none; }
+      .fi::placeholder { color: var(--muted); }
+      textarea.fi { resize: none; min-height: unset; }
       select.fi {
         appearance: none;
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236B21A8'%3E%3Cpath d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 12px center;
-        background-size: 16px;
+        background-repeat: no-repeat; background-position: right 12px center; background-size: 16px;
         padding-right: 38px;
       }
       .fg:has(.fi:focus) .fl { color: var(--accent-h); }
-
-      .frow { display: flex; gap: var(--sp-xs); }
+      .frow { display: flex; gap: var(--s2); }
       .frow .fg { flex: 1; }
-
-      .appr-toggle {
-        display: flex; align-items: flex-start; gap: 10px;
-        background: var(--surface-2); border: 1.5px solid var(--border);
-        border-radius: var(--r-sm); padding: 12px 14px; cursor: pointer;
+      .appr-tog {
+        display: flex; align-items: flex-start; gap: 12px;
+        background: var(--surface2); border: 1.5px solid var(--border);
+        border-radius: var(--r-sm); padding: 14px 16px; cursor: pointer;
+        min-height: 56px; /* K12: touch target */
         transition: border-color var(--dur), background var(--dur);
       }
-      .appr-toggle:has(input:checked) {
-        border-color: var(--accent);
-        background: var(--accent-soft);
-      }
-      .appr-toggle input { width: 16px; height: 16px; accent-color: var(--accent); flex-shrink: 0; margin-top: 2px; }
-      .appr-toggle span { font-family: var(--f-sans); font-size: var(--fs-sm); color: var(--text-2); line-height: 1.6; }
-
-      .modal-btns { display: flex; gap: var(--sp-xs); margin-top: var(--sp-md); }
+      .appr-tog:has(input:checked) { border-color: var(--accent); background: var(--accent-s); }
+      .appr-tog input { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+      .appr-tog span { font-family: var(--sans); font-size: var(--f2); color: var(--text2); line-height: 1.6; }
+      .modal-btns { display: flex; gap: var(--s2); margin-top: var(--s1); }
       .btn-cancel {
-        font-family: var(--f-sans); font-size: var(--fs-sm); font-weight: 500;
-        padding: 10px 20px; border-radius: var(--r-sm);
-        background: var(--surface-2); color: var(--text-2);
+        font-family: var(--sans); font-size: var(--f2); font-weight: 500;
+        padding: 12px 20px; border-radius: var(--r-sm);
+        background: var(--surface2); color: var(--text2);
         border: 1.5px solid var(--border);
+        min-height: 52px;
         transition: background var(--dur), transform var(--dur);
-        min-height: 44px;
       }
       .btn-cancel:hover { background: var(--border); transform: translateY(-1px); }
       .btn-submit {
-        flex: 1;
-        font-family: var(--f-sans); font-size: var(--fs-sm); font-weight: 600;
-        padding: 10px 24px; border-radius: var(--r-sm);
+        flex: 1; font-family: var(--sans); font-size: var(--f2); font-weight: 600;
+        padding: 12px 24px; border-radius: var(--r-sm);
         background: var(--accent); color: #fff; letter-spacing: .03em;
+        min-height: 52px;
         transition: background var(--dur), box-shadow var(--dur), transform var(--dur);
-        min-height: 44px;
       }
       .btn-submit:hover {
         background: var(--accent-h);
@@ -530,222 +561,264 @@
       .btn-submit:active { transform: scale(.98); }
     }
 
-    @layer animation {
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(6px); }
-        to   { opacity: 1; transform: translateY(0); }
+    /* ── FAB — mobile add button ──────────────────────── */
+    @layer fab {
+      .fab {
+        display: none;
+        position: fixed;
+        bottom: calc(var(--tabbar-h) + var(--tabbar-safe) + 16px);
+        right: 20px;
+        width: 56px; height: 56px; /* K12: 44px+ */
+        border-radius: 50%;
+        background: var(--accent);
+        color: #fff;
+        font-size: 24px; line-height: 1;
+        box-shadow: 0 4px 20px color-mix(in oklch,var(--accent),transparent 55%);
+        z-index: 29;
+        transition: background var(--dur), transform var(--dur), box-shadow var(--dur);
+        align-items: center; justify-content: center;
+      }
+      .fab:hover { background: var(--accent-h); transform: scale(1.05); }
+      .fab:active { transform: scale(.95); }
+      @media (max-width: 767px) { .fab { display: flex; } }
+    }
+
+    /* ── Utilities ────────────────────────────────────── */
+    @layer util {
+      .sr-only {
+        position:absolute; width:1px; height:1px;
+        overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap;
+      }
+    }
+
+    /* ── Motion / Animations ──────────────────────────── */
+    @layer motion {
+      @keyframes fadeUp {
+        from { opacity:0; transform:translateY(8px); }
+        to   { opacity:1; transform:translateY(0); }
       }
 
-      /* Q4: scroll-driven カード出現（フォールバック付き） */
+      /* Q4: scroll-driven card reveal */
       @supports (animation-timeline: view()) {
         .card {
-          animation: cardUp linear both;
+          animation: cardReveal linear both;
           animation-timeline: view();
-          animation-range: entry 0% entry 75%;
+          animation-range: entry 0% entry 72%;
         }
-        @keyframes cardUp {
-          from { opacity: 0; transform: translateY(16px); }
-          to   { opacity: 1; transform: translateY(0); }
+        @keyframes cardReveal {
+          from { opacity:0; transform:translateY(14px); }
+          to   { opacity:1; transform:translateY(0); }
         }
       }
       @supports not (animation-timeline: view()) {
-        .card { opacity: 1; transform: none; }
+        .card { opacity:1; transform:none; }
       }
 
-      /* Q7: pulse for approval */
-      .pulse {
-        animation: pulseAnim 1.4s ease infinite;
-      }
-      @keyframes pulseAnim {
+      .pulse { animation: pulseA 1.4s ease infinite; }
+      @keyframes pulseA {
         0%,100% { opacity:1; transform:scale(1); }
         50%      { opacity:.35; transform:scale(.8); }
       }
 
+      /* K12: prefers-reduced-motion — global one-liner */
       @media (prefers-reduced-motion: reduce) {
-        .hero__title { animation: none; clip-path: none; }
-        .hero__sub, .hero__stats, .hero__action { animation: none; opacity: 1; }
-        .card { animation: none; }
-        .pulse { animation: none; }
-        .pbar__fill--a { animation: none; width: 60%; }
+        *, *::before, *::after {
+          animation-duration: .01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: .01ms !important;
+        }
+        .hero__title { clip-path: none; }
+        .pbar__f--scan { animation: none; width: 55%; }
       }
-    }
-
-    @layer utilities {
-      .sr-only { position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0); }
     }
   </style>
 </head>
 <body>
 
-  <!-- ══ Hero Header ══════════════════════════════════════ -->
-  <header class="hero">
+  <a href="#main" class="skip">メインコンテンツへスキップ</a>
+
+  <!-- ══ Hero Header ══════════════════════════════════ -->
+  <header class="hero" role="banner">
     <div class="hero__inner">
       <div class="hero__copy">
         <span class="hero__eyebrow">Powered by Claude Code</span>
         <h1 class="hero__title">Task Manager</h1>
         <p class="hero__sub">タスクを登録して、Claude Code に委ねる。</p>
         <div class="hero__stats" aria-label="タスク集計">
-          <span class="stat"><span class="stat__dot" style="background:#A78BFA;"></span>未着手 3</span>
-          <span class="stat"><span class="stat__dot" style="background:#FCD34D;"></span>解析中 1</span>
-          <span class="stat"><span class="stat__dot pulse" style="background:#F87171;"></span>承認待ち 1</span>
-          <span class="stat"><span class="stat__dot" style="background:#60A5FA;"></span>実行中 1</span>
-          <span class="stat"><span class="stat__dot" style="background:#34D399;"></span>完了 4</span>
+          <span class="stat"><span class="stat__d" style="background:#A78BFA;"></span>未着手 3</span>
+          <span class="stat"><span class="stat__d pulse" style="background:#F87171;"></span>承認待ち 1</span>
+          <span class="stat"><span class="stat__d" style="background:#60A5FA;"></span>実行中 1</span>
+          <span class="stat"><span class="stat__d" style="background:#34D399;"></span>完了 4</span>
         </div>
       </div>
       <div class="hero__action">
-        <button class="btn-add" onclick="openModal()">＋ タスクを追加</button>
+        <button class="btn-add-hd" onclick="openModal()">＋ タスクを追加</button>
       </div>
     </div>
   </header>
 
-  <!-- ══ Kanban Board ══════════════════════════════════════ -->
-  <main>
-    <div class="board-scroll">
-      <div class="board" role="list">
+  <!-- ══ Board ════════════════════════════════════════ -->
+  <main id="main" role="main" tabindex="-1">
+    <div class="board-wrap">
+      <div class="board-inner">
 
         <!-- 未着手 -->
-        <section class="col col--pending" aria-label="未着手">
+        <section id="col-pending" class="col col--pending is-active" aria-label="未着手">
           <div class="col__hd">
-            <span class="col__dot" style="background:#7C3AED;"></span>
-            <span class="col__label" style="color:#5B21B6;">未着手</span>
+            <span class="col__dot" style="background:var(--s-pending);"></span>
+            <span class="col__label" style="color:var(--s-pending);">未着手</span>
             <span class="col__n">3</span>
           </div>
-
-          <article class="card card--low" role="listitem" tabindex="0">
+          <article class="card card--L" role="article" tabindex="0">
             <div class="card__meta">
               <span class="badge ba">自動化</span>
-              <span class="risk rl">low</span>
+              <span class="risk rL">LOW</span>
             </div>
             <h2 class="card__title">今日のAIトレンドからX投稿を3本生成する</h2>
-            <p class="card__skill">🛠 nekoojisan-post-writer</p>
-            <p class="card__time">4月15日 08:00</p>
+            <div class="card__foot">
+              <span class="card__skill">🛠 nekoojisan-post-writer</span>
+              <span class="card__time">4月15日 08:00</span>
+            </div>
           </article>
-
-          <article class="card card--low" role="listitem" tabindex="0">
+          <article class="card card--L" role="article" tabindex="0">
             <div class="card__meta">
               <span class="badge bc">コンテンツ</span>
-              <span class="risk rl">low</span>
+              <span class="risk rL">LOW</span>
             </div>
             <h2 class="card__title">note記事「AIと副業」の構成案を作る</h2>
-            <p class="card__skill">🛠 kindan</p>
-            <p class="card__time">4月15日 09:30</p>
+            <div class="card__foot">
+              <span class="card__skill">🛠 kindan</span>
+              <span class="card__time">4月15日 09:30</span>
+            </div>
           </article>
-
-          <article class="card card--low" role="listitem" tabindex="0">
+          <article class="card card--L" role="article" tabindex="0">
             <div class="card__meta">
               <span class="badge bm">メモ</span>
-              <span class="risk rl">low</span>
+              <span class="risk rL">LOW</span>
             </div>
             <h2 class="card__title">Claude Team導入提案書のアイデアをまとめる</h2>
-            <p class="card__skill card__skill--new">💡 スキル作成を提案</p>
-            <p class="card__time">4月15日 10:15</p>
+            <div class="card__foot">
+              <span class="card__skill card__skill--new">💡 スキル作成を提案</span>
+              <span class="card__time">4月15日 10:15</span>
+            </div>
           </article>
         </section>
 
         <!-- 解析中 -->
-        <section class="col col--analyzing" aria-label="解析中">
+        <section id="col-analyzing" class="col col--analyzing" aria-label="解析中">
           <div class="col__hd">
-            <span class="col__dot" style="background:#D97706;"></span>
-            <span class="col__label" style="color:#92400E;">解析中</span>
+            <span class="col__dot" style="background:var(--s-analyzing);"></span>
+            <span class="col__label" style="color:var(--s-analyzing);">解析中</span>
             <span class="col__n">1</span>
           </div>
-
-          <article class="card card--medium" role="listitem" tabindex="0">
+          <article class="card card--M" role="article" tabindex="0">
             <div class="card__meta">
               <span class="badge bd">開発</span>
-              <span class="risk rm">medium</span>
+              <span class="risk rM">MED</span>
             </div>
             <h2 class="card__title">Telegram botに /tasks コマンドを追加する</h2>
-            <div class="sbox sbox-w">🔍 ワークフロー生成中…</div>
-            <div class="pbar pbar--a" role="progressbar">
-              <div class="pbar__fill pbar__fill--a"></div>
+            <div class="sbox sbox-scan">🔍 ワークフロー生成中…</div>
+            <div class="pbar pbar--scan" role="progressbar" aria-label="解析中">
+              <div class="pbar__f pbar__f--scan"></div>
             </div>
-            <p class="card__time" style="margin-top:8px;">4月15日 11:00</p>
+            <div class="card__foot" style="margin-top:var(--s2);">
+              <span class="card__skill">🛠 coding-standards</span>
+              <span class="card__time">4月15日 11:00</span>
+            </div>
           </article>
         </section>
 
         <!-- 承認待ち -->
-        <section class="col col--approval" aria-label="承認待ち">
+        <section id="col-approval" class="col col--approval" aria-label="承認待ち">
           <div class="col__hd">
-            <span class="col__dot pulse" style="background:#DC2626;"></span>
-            <span class="col__label" style="color:#991B1B;">承認待ち</span>
+            <span class="col__dot pulse" style="background:var(--s-approval);"></span>
+            <span class="col__label" style="color:var(--s-approval);">承認待ち</span>
             <span class="col__n">1</span>
           </div>
-
-          <article class="card card--high" role="listitem" tabindex="0">
+          <article class="card card--H" role="article" tabindex="0">
             <div class="card__meta">
               <span class="badge bd">開発</span>
-              <span class="risk rh">high</span>
+              <span class="risk rH">HIGH</span>
             </div>
             <h2 class="card__title">GitHub Pages の設定を更新してデプロイする</h2>
-            <div class="sbox sbox-a">
+            <div class="sbox sbox-warn">
               ⚠️ 外部デプロイを含む操作<br>
-              <span style="opacity:.75;">Telegramで承認を確認中</span>
+              <span style="opacity:.75;font-size:var(--f4);">Telegramで承認を確認中</span>
             </div>
-            <div class="appr-btns">
-              <button class="btn-rej">❌ 拒否</button>
-              <button class="btn-apv">✅ 承認</button>
+            <div class="appr" role="group" aria-label="承認操作">
+              <button class="btn-rej" aria-label="拒否する">❌ 拒否</button>
+              <button class="btn-apv" aria-label="承認する">✅ 承認する</button>
             </div>
-            <p class="card__time">4月15日 11:45</p>
+            <div class="card__foot">
+              <span class="card__skill">🛠 deployment-patterns</span>
+              <span class="card__time">4月15日 11:45</span>
+            </div>
           </article>
         </section>
 
         <!-- 実行中 -->
-        <section class="col col--running" aria-label="実行中">
+        <section id="col-running" class="col col--running" aria-label="実行中">
           <div class="col__hd">
-            <span class="col__dot" style="background:#2563EB;"></span>
-            <span class="col__label" style="color:#1D4ED8;">実行中</span>
+            <span class="col__dot" style="background:var(--s-running);"></span>
+            <span class="col__label" style="color:var(--s-running);">実行中</span>
             <span class="col__n">1</span>
           </div>
-
-          <article class="card card--low" role="listitem" tabindex="0">
+          <article class="card card--L" role="article" tabindex="0">
             <div class="card__meta">
               <span class="badge ba">自動化</span>
-              <span class="risk rl">low</span>
+              <span class="risk rL">LOW</span>
             </div>
             <h2 class="card__title">朝のAIリサーチレポートを生成する</h2>
-            <div class="sbox sbox-i">🤖 Claude Code 実行中…</div>
-            <div class="pbar pbar--r" role="progressbar" aria-valuenow="72">
-              <div class="pbar__fill pbar__fill--r"></div>
+            <div class="sbox sbox-info">🤖 Claude Code 実行中…</div>
+            <div class="pbar pbar--run" role="progressbar" aria-valuenow="72" aria-valuemin="0" aria-valuemax="100">
+              <div class="pbar__f pbar__f--run"></div>
             </div>
-            <p class="card__time" style="margin-top:8px;">実行開始 06:02</p>
+            <div class="card__foot" style="margin-top:var(--s2);">
+              <span class="card__skill">🛠 nekoojisan-post-writer</span>
+              <span class="card__time">実行開始 06:02</span>
+            </div>
           </article>
         </section>
 
         <!-- 完了 -->
-        <section class="col col--done" aria-label="完了">
+        <section id="col-done" class="col col--done" aria-label="完了">
           <div class="col__hd">
-            <span class="col__dot" style="background:#059669;"></span>
-            <span class="col__label" style="color:#065F46;">完了</span>
+            <span class="col__dot" style="background:var(--s-done);"></span>
+            <span class="col__label" style="color:var(--s-done);">完了</span>
             <span class="col__n">4</span>
           </div>
-
-          <article class="card card--done" style="opacity:.65;" role="listitem" tabindex="0">
+          <article class="card card--done" style="opacity:.68;" role="article" tabindex="0">
             <div class="card__meta">
               <span class="badge ba">自動化</span>
-              <span style="font-size:var(--fs-2xs);color:#059669;font-family:var(--f-sans);">✓</span>
+              <span style="font-size:var(--f4);color:var(--s-done);font-family:var(--sans);font-weight:600;">✓ 完了</span>
             </div>
             <h2 class="card__title">Threads用 恋愛投稿を5本作成する</h2>
-            <p class="card__skill">🛠 romance-post-batch</p>
-            <p class="card__time">4月14日 21:05</p>
+            <div class="card__foot">
+              <span class="card__skill card__skill--done">🛠 romance-post-batch</span>
+              <span class="card__time">4月14日 21:05</span>
+            </div>
           </article>
-
-          <article class="card card--done" style="opacity:.65;" role="listitem" tabindex="0">
+          <article class="card card--done" style="opacity:.68;" role="article" tabindex="0">
             <div class="card__meta">
               <span class="badge bd">開発</span>
-              <span style="font-size:var(--fs-2xs);color:#059669;font-family:var(--f-sans);">✓</span>
+              <span style="font-size:var(--f4);color:var(--s-done);font-family:var(--sans);font-weight:600;">✓ 完了</span>
             </div>
             <h2 class="card__title">LaunchAgent の plist ファイルを修正する</h2>
-            <p class="card__time">4月14日 18:30</p>
+            <div class="card__foot">
+              <span class="card__skill card__skill--done">🛠 coding-standards</span>
+              <span class="card__time">4月14日 18:30</span>
+            </div>
           </article>
-
-          <article class="card card--done" style="opacity:.65;" role="listitem" tabindex="0">
+          <article class="card card--done" style="opacity:.68;" role="article" tabindex="0">
             <div class="card__meta">
               <span class="badge br">リサーチ</span>
-              <span style="font-size:var(--fs-2xs);color:#059669;font-family:var(--f-sans);">✓</span>
+              <span style="font-size:var(--f4);color:var(--s-done);font-family:var(--sans);font-weight:600;">✓ 完了</span>
             </div>
             <h2 class="card__title">4月分 note記事のキーワードリサーチ</h2>
-            <p class="card__time">4月13日 14:00</p>
+            <div class="card__foot">
+              <span class="card__skill card__skill--done">🛠 deep-research</span>
+              <span class="card__time">4月13日 14:00</span>
+            </div>
           </article>
         </section>
 
@@ -753,49 +826,74 @@
     </div>
   </main>
 
-  <!-- ══ Modal ════════════════════════════════════════════ -->
+  <!-- ══ Tab Bar（mobile） ══════════════════════════════ -->
+  <nav class="tabbar" role="tablist" aria-label="ステータス切替">
+    <div class="tabbar__inner">
+      <button class="tab-btn" role="tab" aria-selected="true"  aria-controls="col-pending"   onclick="switchTab(this,'pending')">
+        <span class="tab-btn__dot" style="background:var(--s-pending);"></span>
+        <span>未着手</span>
+        <span class="tab-btn__count">3</span>
+      </button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="col-analyzing" onclick="switchTab(this,'analyzing')">
+        <span class="tab-btn__dot" style="background:var(--s-analyzing);"></span>
+        <span>解析中</span>
+        <span class="tab-btn__count">1</span>
+      </button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="col-approval"  onclick="switchTab(this,'approval')">
+        <span class="tab-btn__dot pulse" style="background:var(--s-approval);"></span>
+        <span>承認待ち</span>
+        <span class="tab-btn__count">1</span>
+      </button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="col-running"   onclick="switchTab(this,'running')">
+        <span class="tab-btn__dot" style="background:var(--s-running);"></span>
+        <span>実行中</span>
+        <span class="tab-btn__count">1</span>
+      </button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="col-done"      onclick="switchTab(this,'done')">
+        <span class="tab-btn__dot" style="background:var(--s-done);"></span>
+        <span>完了</span>
+        <span class="tab-btn__count">4</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ══ FAB（mobile） ══════════════════════════════════ -->
+  <button class="fab" onclick="openModal()" aria-label="タスクを追加">＋</button>
+
+  <!-- ══ Modal ════════════════════════════════════════ -->
   <div id="modal" class="overlay" hidden onclick="closeOutside(event)">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mtitle">
+      <div class="modal__drag" aria-hidden="true"></div>
       <h2 class="modal__title" id="mtitle">タスクを追加</h2>
-
       <div class="fg">
         <label class="fl" for="t-title">タイトル</label>
-        <input id="t-title" type="text" class="fi" placeholder="何をしてほしいか、一言で" />
+        <input id="t-title" type="text" class="fi" placeholder="何をしてほしいか、一言で" autocomplete="off" />
       </div>
-
       <div class="fg">
         <label class="fl" for="t-desc">詳細（任意）</label>
         <textarea id="t-desc" class="fi" rows="3" placeholder="背景・条件・出力先など"></textarea>
       </div>
-
       <div class="frow">
         <div class="fg">
           <label class="fl" for="t-type">種別</label>
           <select id="t-type" class="fi">
-            <option>自動化</option>
-            <option>開発</option>
-            <option>コンテンツ生成</option>
-            <option>リサーチ</option>
-            <option>メモ・アイデア</option>
-            <option>その他</option>
+            <option>自動化</option><option>開発</option>
+            <option>コンテンツ生成</option><option>リサーチ</option>
+            <option>メモ・アイデア</option><option>その他</option>
           </select>
         </div>
         <div class="fg">
-          <label class="fl" for="t-when">実行タイミング</label>
+          <label class="fl" for="t-when">タイミング</label>
           <select id="t-when" class="fi">
-            <option>次回スケジュール</option>
-            <option>次の朝 06:00</option>
-            <option>今夜 21:00</option>
-            <option>手動で実行</option>
+            <option>次回スケジュール</option><option>朝 06:00</option>
+            <option>夜 21:00</option><option>手動</option>
           </select>
         </div>
       </div>
-
-      <label class="appr-toggle">
+      <label class="appr-tog">
         <input type="checkbox" />
         <span>実行前に <strong>Telegram で承認</strong> を求める</span>
       </label>
-
       <div class="modal-btns">
         <button class="btn-cancel" onclick="closeModal()">キャンセル</button>
         <button class="btn-submit">登録する</button>
@@ -803,32 +901,51 @@
     </div>
   </div>
 
-  <script>
+  <script defer>
     /* Modal */
     function openModal() {
       document.getElementById('modal').hidden = false;
-      document.getElementById('t-title').focus();
+      setTimeout(() => document.getElementById('t-title').focus(), 50);
     }
     function closeModal() { document.getElementById('modal').hidden = true; }
-    function closeOutside(e) { if (e.target === document.getElementById('modal')) closeModal(); }
+    function closeOutside(e) { if (e.target.id === 'modal') closeModal(); }
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-    /* Q5/Q7: 3D tilt on card hover */
-    const TILT = 6;
+    /* Mobile tab switching (K12: ARIA tabpanel) */
+    const cols = ['pending','analyzing','approval','running','done'];
+    function switchTab(btn, id) {
+      cols.forEach(c => {
+        document.getElementById('col-' + c)?.classList.remove('is-active');
+      });
+      document.querySelectorAll('.tab-btn').forEach(b => b.setAttribute('aria-selected','false'));
+      document.getElementById('col-' + id)?.classList.add('is-active');
+      btn.setAttribute('aria-selected','true');
+    }
+
+    /* Q5/Q7: 3D tilt on card hover — K19: throttled via rAF */
+    const TILT = 5;
+    let ticking = false;
     document.querySelectorAll('.card').forEach(card => {
       card.addEventListener('mousemove', e => {
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-        const r = card.getBoundingClientRect();
-        const x = (e.clientX - r.left) / r.width  - .5;
-        const y = (e.clientY - r.top)  / r.height - .5;
-        card.style.transform = `translateY(-3px) rotateY(${x*TILT}deg) rotateX(${-y*TILT}deg)`;
-        card.style.boxShadow = 'var(--sh-lift)';
-      });
+        if (window.matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+        if (!ticking) {
+          requestAnimationFrame(() => {
+            const r = card.getBoundingClientRect();
+            const x = (e.clientX - r.left) / r.width  - .5;
+            const y = (e.clientY - r.top)  / r.height - .5;
+            card.style.transform = `translateY(-3px) rotateY(${x*TILT}deg) rotateX(${-y*TILT}deg)`;
+            card.style.boxShadow = 'var(--sh-h)';
+            ticking = false;
+          });
+          ticking = true;
+        }
+      }, { passive: true }); /* K19: passive */
       card.addEventListener('mouseleave', () => {
         card.style.transform = '';
         card.style.boxShadow = '';
       });
     });
   </script>
+
 </body>
 </html>
