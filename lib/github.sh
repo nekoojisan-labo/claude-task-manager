@@ -34,18 +34,24 @@ github_update_file() {
   local message="${4:-"chore: update ${file_path}"}"
 
   local encoded
-  encoded=$(echo "$content" | base64)
+  encoded=$(printf '%s' "$content" | base64)
+
+  local body
+  body=$(python3 -c "
+import json, sys
+print(json.dumps({
+    'message': sys.argv[1],
+    'content': sys.argv[2],
+    'sha':     sys.argv[3],
+}))
+" "$message" "$encoded" "$sha")
 
   curl -sf -X PUT \
     -H "Authorization: Bearer ${GITHUB_TOKEN}" \
     -H "Accept: application/vnd.github.v3+json" \
     -H "Content-Type: application/json" \
     "${GITHUB_API}/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${file_path}" \
-    -d "{
-      \"message\": \"${message}\",
-      \"content\": \"${encoded}\",
-      \"sha\": \"${sha}\"
-    }" > /dev/null
+    -d "$body" > /dev/null
 }
 
 # github_raw_get <path>

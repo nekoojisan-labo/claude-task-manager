@@ -205,12 +205,18 @@ main() {
   local skills_list
   skills_list=$(_get_skills_list)
   local analyze_prompt
-  analyze_prompt=$(sed \
-    -e "s/{{TITLE}}/${title}/g" \
-    -e "s/{{DESCRIPTION}}/${description}/g" \
-    -e "s/{{TYPE}}/${task_type}/g" \
-    -e "s/{{SKILLS_LIST}}/${skills_list}/g" \
-    "${LIB_DIR}/analyze-prompt.txt")
+  analyze_prompt=$(python3 - "${LIB_DIR}/analyze-prompt.txt" "$title" "$description" "$task_type" "$skills_list" <<'PYEOF'
+import sys
+with open(sys.argv[1]) as f:
+    tmpl = f.read()
+result = (tmpl
+    .replace('{{TITLE}}',       sys.argv[2])
+    .replace('{{DESCRIPTION}}', sys.argv[3])
+    .replace('{{TYPE}}',        sys.argv[4])
+    .replace('{{SKILLS_LIST}}', sys.argv[5]))
+print(result, end='')
+PYEOF
+)
 
   local analysis_json
   analysis_json=$("${CLAUDE_BIN}" -p "$analyze_prompt" --model haiku 2>/dev/null | \
