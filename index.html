@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claude Task Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600;700&family=Noto+Sans+JP:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            serif: ['"Noto Serif JP"', 'serif'],
+            sans: ['"Noto Sans JP"', 'sans-serif'],
+          },
+          colors: {
+            surface: '#faf9ff',
+            card: '#ffffff',
+            border: '#ede9fe',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Noto Serif JP', serif; background-color: #faf9ff; }
+    .badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 9999px; font-size: 11px; font-weight: 500; font-family: 'Noto Sans JP', sans-serif; }
+    .col-header { font-family: 'Noto Sans JP', sans-serif; font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+    .task-card { background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 2px 12px rgba(109,40,217,0.07); border: 1px solid #ede9fe; transition: all 0.2s; cursor: pointer; }
+    .task-card:hover { box-shadow: 0 4px 20px rgba(109,40,217,0.13); border-color: #c4b5fd; transform: translateY(-1px); }
+    .btn-primary { background: #7c3aed; color: #fff; border-radius: 12px; padding: 10px 22px; font-family: 'Noto Sans JP', sans-serif; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+    .btn-primary:hover { background: #6d28d9; box-shadow: 0 4px 16px rgba(109,40,217,0.3); }
+    .btn-ghost { background: #ede9fe; color: #6d28d9; border-radius: 12px; padding: 10px 20px; font-family: 'Noto Sans JP', sans-serif; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+    .btn-ghost:hover { background: #ddd6fe; }
+    .input-field { background: #fff; border: 1.5px solid #ddd6fe; border-radius: 12px; padding: 12px 16px; font-family: 'Noto Sans JP', sans-serif; font-size: 14px; color: #1e1b4b; width: 100%; transition: all 0.2s; }
+    .input-field:focus { outline: none; border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124,58,237,0.12); }
+    .input-field::placeholder { color: #a78bfa; }
+    .kanban-col { background: #f5f3ff; border-radius: 20px; padding: 16px; min-width: 240px; flex: 1; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(30,27,75,0.3); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+    .modal { background: #fff; border-radius: 24px; padding: 32px; width: 100%; max-width: 520px; box-shadow: 0 20px 60px rgba(109,40,217,0.2); }
+    .risk-high { color: #dc2626; background: #fef2f2; }
+    .risk-medium { color: #d97706; background: #fffbeb; }
+    .risk-low { color: #059669; background: #ecfdf5; }
+    .type-auto { color: #7c3aed; background: #f5f3ff; }
+    .type-dev { color: #2563eb; background: #eff6ff; }
+    .type-content { color: #db2777; background: #fdf4ff; }
+    .type-memo { color: #059669; background: #ecfdf5; }
+    select.input-field { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%237c3aed'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; background-size: 16px; padding-right: 40px; }
+    .scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .scroll-x::-webkit-scrollbar { height: 4px; }
+    .scroll-x::-webkit-scrollbar-track { background: #ede9fe; border-radius: 2px; }
+    .scroll-x::-webkit-scrollbar-thumb { background: #c4b5fd; border-radius: 2px; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- Header -->
+  <header style="background: linear-gradient(135deg, #5b21b6 0%, #7c3aed 60%, #a78bfa 100%);" class="px-6 py-5 shadow-lg">
+    <div class="max-w-6xl mx-auto flex items-center justify-between">
+      <div>
+        <h1 class="text-white font-serif text-xl font-semibold tracking-tight">Claude Task Manager</h1>
+        <p style="color: #ddd6fe; font-family: 'Noto Sans JP', sans-serif; font-size: 12px; margin-top: 2px;">タスクを登録して Claude Code に委託する</p>
+      </div>
+      <button class="btn-primary" style="background: rgba(255,255,255,0.2); border: 1.5px solid rgba(255,255,255,0.4);" onclick="openModal()">
+        ＋ タスクを追加
+      </button>
+    </div>
+  </header>
+
+  <!-- Stats Bar -->
+  <div class="max-w-6xl mx-auto px-6 py-4">
+    <div class="flex gap-4 flex-wrap" style="font-family: 'Noto Sans JP', sans-serif;">
+      <div class="flex items-center gap-2 text-sm" style="color: #6d28d9;">
+        <span style="width:8px;height:8px;background:#a78bfa;border-radius:50%;display:inline-block;"></span>
+        未着手 <strong>3</strong>
+      </div>
+      <div class="flex items-center gap-2 text-sm" style="color: #d97706;">
+        <span style="width:8px;height:8px;background:#fbbf24;border-radius:50%;display:inline-block;"></span>
+        解析中 <strong>1</strong>
+      </div>
+      <div class="flex items-center gap-2 text-sm" style="color: #dc2626;">
+        <span style="width:8px;height:8px;background:#f87171;border-radius:50%;display:inline-block;animation:pulse 1.5s infinite;"></span>
+        承認待ち <strong>1</strong>
+      </div>
+      <div class="flex items-center gap-2 text-sm" style="color: #2563eb;">
+        <span style="width:8px;height:8px;background:#60a5fa;border-radius:50%;display:inline-block;"></span>
+        実行中 <strong>1</strong>
+      </div>
+      <div class="flex items-center gap-2 text-sm" style="color: #059669;">
+        <span style="width:8px;height:8px;background:#34d399;border-radius:50%;display:inline-block;"></span>
+        完了 <strong>4</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kanban Board -->
+  <main class="max-w-6xl mx-auto px-4 pb-10">
+    <div class="scroll-x">
+      <div class="flex gap-4" style="min-width: 1100px;">
+
+        <!-- 未着手 -->
+        <div class="kanban-col">
+          <div class="col-header mb-4" style="color:#7c3aed;">
+            <span style="width:8px;height:8px;background:#a78bfa;border-radius:50%;display:inline-block;margin-right:6px;"></span>
+            未着手
+          </div>
+
+          <div class="task-card mb-3" onclick="openDetail('t1')">
+            <div class="flex items-start justify-between mb-2">
+              <span class="badge type-auto">自動化</span>
+              <span class="badge risk-low">low</span>
+            </div>
+            <h3 class="font-serif text-sm font-semibold mb-1" style="color:#1e1b4b; line-height:1.6;">今日のAIトレンドからX投稿を3本生成する</h3>
+            <p style="font-family:'Noto Sans JP';font-size:11px;color:#8b5cf6;margin-top:6px;">🛠 nekoojisan-post-writer</p>
+            <p style="font-family:'Noto Sans JP';font-size:11px;color:#a78bfa;margin-top:3px;">4月15日 08:00</p>
+          </div>
+
+          <div class="task-card mb-3">
+            <div class="flex items-start justify-between mb-2">
+              <span class="badge type-content">コンテンツ</span>
+              <span class="badge risk-low">low</span>
+            </div>
+            <h3 class="font-serif text-sm font-semibold mb-1" style="color:#1e1b4b; line-height:1.6;">note記事「AIと副業」の構成案を作る</h3>
+            <p style="font-family:'Noto Sans JP';font-size:11px;color:#8b5cf6;margin-top:6px;">🛠 kindan</p>
+            <p style="font-family:'Noto Sans JP';font-size:11px;color:#a78bfa;margin-top:3px;">4月15日 09:30</p>
+          </div>
+
+          <div class="task-card mb-3">
+            <div class="flex items-start justify-between mb-2">
+              <span class="badge type-memo">メモ</span>
+              <span class="badge risk-low">low</span>
+            </div>
+            <h3 class="font-serif text-sm font-semibold mb-1" style="color:#1e1b4b; line-height:1.6;">Claude Team導入提案書のアイデアをまとめる</h3>
+            <p style="font-family:'Noto Sans JP';font-size:11px;color:#db2777;margin-top:6px;">💡 スキル作成を提案</p>
+            <p style="font-family:'Noto Sans JP';font-size:11px;color:#a78bfa;margin-top:3px;">4月15日 10:15</p>
+          </div>
+        </div>
+
+        <!-- 解析中 -->
+        <div class="kanban-col">
+          <div class="col-header mb-4" style="color:#d97706;">
+            <span style="width:8px;height:8px;background:#fbbf24;border-radius:50%;display:inline-block;margin-right:6px;"></span>
+            解析中
+          </div>
+
+          <div class="task-card mb-3" style="border-color:#fde68a;">
+            <div class="flex items-start justify-between mb-2">
+              <span class="badge type-dev">開発</span>
+              <span class="badge risk-medium">medium</span>
+            </div>
+            <h3 class="font-serif text-sm font-semibold mb-1" style="color:#1e1b4b; line-height:1.6;">Telegram botに /tasks コマンドを追加する</h3>
+            <div style="background:#fffbeb;border-radius:8px;padding:8px;margin-top:8px;">
+              <p style="font-family:'Noto Sans JP';font-size:11px;color:#92400e;">🔍 ワークフロー生成中...</p>
+              <div style="background:#fde68a;height:3px;border-radius:2px;margin-top:6px;animation:loading 1.5s infinite;">
+                <div style="background:#d97706;height:100%;width:60%;border-radius:2px;"></div>
+              </div>
+            </div>
+            <p style="font-family:'Noto Sans JP';font-size:11px;color:#a78bfa;margin-top:6px;">4月15日 11:00</p>
+          </div>
+        </div>
+
+        <!-- 承認待ち -->
+        <div class="kanban-col" style="background:#fff5f5;">
+          <div class="col-header mb-4" style="color:#dc2626;">
+            <span style="width:8px;height:8px;background:#f87171;border-radius:50%;display:inline-block;margin-right:6px;animation:pulse 1.5s infinite;"></span>
+            承認待ち
+          </div>
+
+          <div class="task-card mb-3" style="border-color:#fecaca;">
+            <div class="flex items-start justify-between mb-2">
+              <span class="badge type-dev">開発</span>
+              <span class="badge risk-high">high</span>
+            </div>
+            <h3 class="font-serif text-sm font-semibold mb-1" style="color:#1e1b4b; line-height:1.6;">GitHub Pages の設定を更新してデプロイする</h3>
+            <div style="background:#fef2f2;border-radius:8px;padding:8px;margin-top:8px;">
+              <p style="font-family:'Noto Sans JP';font-size:11px;color:#dc2626;font-weight:500;">⚠️ 外部デプロイを含む操作</p>
+              <p style="font-family:'Noto Sans JP';font-size:11px;color:#b91c1c;margin-top:2px;">Telegramで承認を確認中</p>
+            </div>
+            <div class="flex gap-2 mt-3">
+              <button class="btn-ghost" style="padding:6px 14px;font-size:12px;background:#fee2e2;color:#dc2626;">❌ 拒否</button>
+              <button class="btn-primary" style="padding:6px 14px;font-size:12px;background:#dc2626;">✅ 承認</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 実行中 -->
+        <div class="kanban-col" style="background:#eff6ff;">
+          <div class="col-header mb-4" style="color:#2563eb;">
+            <span style="width:8px;height:8px;background:#60a5fa;border-radius:50%;display:inline-block;margin-right:6px;"></span>
+            実行中
+          </div>
+
+          <div class="task-card mb-3" style="border-color:#bfdbfe;">
+            <div class="flex items-start justify-between mb-2">
+              <span class="badge type-auto">自動化</span>
+              <span class="badge risk-low">low</span>
+            </div>
+            <h3 class="font-serif text-sm font-semibold mb-1" style="color:#1e1b4b; line-height:1.6;">朝のAIリサーチレポートを生成する</h3>
+            <div style="background:#eff6ff;border-radius:8px;padding:8px;margin-top:8px;">
+              <p style="font-family:'Noto Sans JP';font-size:11px;color:#1d4ed8;">🤖 Claude Code 実行中...</p>
+              <div style="background:#dbeafe;height:3px;border-radius:2px;margin-top:6px;">
+                <div style="background:#2563eb;height:100%;width:75%;border-radius:2px;"></div>
+              </div>
+            </div>
+            <p style="font-family:'Noto Sans JP';font-size:11px;color:#a78bfa;margin-top:6px;">実行開始: 06:02</p>
+          </div>
+        </div>
+
+        <!-- 完了 -->
+        <div class="kanban-col" style="background:#f0fdf4;">
+          <div class="col-header mb-4" style="color:#059669;">
+            <span style="width:8px;height:8px;background:#34d399;border-radius:50%;display:inline-block;margin-right:6px;"></span>
+            完了
+          </div>
+
+          <div class="task-card mb-3" style="border-color:#a7f3d0;opacity:0.8;">
+            <div class="flex items-start justify-between mb-2">
+              <span class="badge type-auto">自動化</span>
+              <span style="font-family:'Noto Sans JP';font-size:11px;color:#059669;">✓ 完了</span>
+            </div>
+            <h3 class="font-serif text-sm font-semibold mb-1" style="color:#374151; line-height:1.6;">Threads用 恋愛投稿を5本作成する</h3>
+            <p style="font-family:'Noto Sans JP';font-size:11px;color:#059669;margin-top:6px;">🛠 romance-post-batch</p>
+            <p style="font-family:'Noto Sans JP';font-size:11px;color:#a78bfa;margin-top:3px;">4月14日 21:05 完了</p>
+          </div>
+
+          <div class="task-card mb-3" style="border-color:#a7f3d0;opacity:0.8;">
+            <div class="flex items-start justify-between mb-2">
+              <span class="badge type-dev">開発</span>
+              <span style="font-family:'Noto Sans JP';font-size:11px;color:#059669;">✓ 完了</span>
+            </div>
+            <h3 class="font-serif text-sm font-semibold mb-1" style="color:#374151; line-height:1.6;">LaunchAgent の plist ファイルを修正する</h3>
+            <p style="font-family:'Noto Sans JP';font-size:11px;color:#a78bfa;margin-top:6px;">4月14日 18:30 完了</p>
+          </div>
+
+          <div class="task-card mb-3" style="border-color:#a7f3d0;opacity:0.8;">
+            <div class="flex items-start justify-between mb-2">
+              <span class="badge type-content">コンテンツ</span>
+              <span style="font-family:'Noto Sans JP';font-size:11px;color:#059669;">✓ 完了</span>
+            </div>
+            <h3 class="font-serif text-sm font-semibold mb-1" style="color:#374151; line-height:1.6;">4月分 note記事のキーワードリサーチ</h3>
+            <p style="font-family:'Noto Sans JP';font-size:11px;color:#a78bfa;margin-top:6px;">4月13日 14:00 完了</p>
+          </div>
+        </div>
+
+      </div><!-- end flex -->
+    </div><!-- end scroll-x -->
+  </main>
+
+  <!-- Add Task Modal -->
+  <div id="modal" class="modal-overlay" style="display:none;" onclick="closeModalOutside(event)">
+    <div class="modal">
+      <h2 class="font-serif text-lg font-semibold mb-6" style="color:#1e1b4b;">タスクを追加</h2>
+
+      <div class="mb-4">
+        <label style="font-family:'Noto Sans JP';font-size:12px;color:#6d28d9;font-weight:500;display:block;margin-bottom:6px;">タイトル</label>
+        <input type="text" class="input-field" placeholder="何をしてほしいか、一言で" />
+      </div>
+
+      <div class="mb-4">
+        <label style="font-family:'Noto Sans JP';font-size:12px;color:#6d28d9;font-weight:500;display:block;margin-bottom:6px;">詳細（任意）</label>
+        <textarea class="input-field" rows="3" style="resize:none;" placeholder="背景・条件・出力先など、詳しく書くほど精度が上がります"></textarea>
+      </div>
+
+      <div class="flex gap-3 mb-4">
+        <div style="flex:1;">
+          <label style="font-family:'Noto Sans JP';font-size:12px;color:#6d28d9;font-weight:500;display:block;margin-bottom:6px;">種別</label>
+          <select class="input-field">
+            <option>自動化</option>
+            <option>開発</option>
+            <option>コンテンツ生成</option>
+            <option>リサーチ</option>
+            <option>メモ・アイデア</option>
+            <option>その他</option>
+          </select>
+        </div>
+        <div style="flex:1;">
+          <label style="font-family:'Noto Sans JP';font-size:12px;color:#6d28d9;font-weight:500;display:block;margin-bottom:6px;">実行タイミング</label>
+          <select class="input-field">
+            <option>次回スケジュール</option>
+            <option>次の朝（06:00）</option>
+            <option>今夜（21:00）</option>
+            <option>手動で実行</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="mb-6" style="background:#f5f3ff;border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;">
+        <input type="checkbox" id="approval" style="width:18px;height:18px;accent-color:#7c3aed;" />
+        <label for="approval" style="font-family:'Noto Sans JP';font-size:13px;color:#4c1d95;cursor:pointer;">
+          実行前に <strong>Telegram で承認</strong> を求める
+        </label>
+      </div>
+
+      <div class="flex gap-3">
+        <button class="btn-ghost" style="flex:1;" onclick="closeModal()">キャンセル</button>
+        <button class="btn-primary" style="flex:2;">登録する</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function openModal() { document.getElementById('modal').style.display = 'flex'; }
+    function closeModal() { document.getElementById('modal').style.display = 'none'; }
+    function closeModalOutside(e) { if (e.target === document.getElementById('modal')) closeModal(); }
+    function openDetail(id) { /* 詳細モーダル（本実装時に追加） */ }
+  </script>
+
+  <style>
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+    @keyframes loading { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+  </style>
+</body>
+</html>
