@@ -636,6 +636,13 @@
 <body>
 
   <a href="#main" class="skip">メインコンテンツへスキップ</a>
+  <!-- Error banner -->
+  <div id="error-banner" hidden role="alert" style="
+    position:fixed;top:var(--s1);left:50%;transform:translateX(-50%);
+    background:#DC2626;color:#fff;padding:var(--s3) var(--s1);
+    border-radius:var(--r-md);font-size:var(--f3);z-index:200;
+    max-width:90vw;text-align:center;box-shadow:var(--sh);
+  "></div>
 
   <!-- ══ Hero Header ══════════════════════════════════ -->
   <header class="hero" role="banner">
@@ -652,6 +659,7 @@
         </div>
       </div>
       <div class="hero__action">
+        <button class="btn-settings" onclick="openSettings()" aria-label="設定" title="GitHub設定" style="margin-right:var(--s2);padding:var(--s3) var(--s2);border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface2);color:var(--text2);font-size:var(--f3);">⚙</button>
         <button class="btn-add-hd" onclick="openModal()">＋ タスクを追加</button>
       </div>
     </div>
@@ -901,17 +909,327 @@
     </div>
   </div>
 
+  <!-- ══ Settings Modal ════════════════════════════════ -->
+  <div id="settings-overlay" class="overlay" hidden onclick="closeSettingsOutside(event)">
+    <div class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="stitle">
+      <div class="modal__drag" aria-hidden="true"></div>
+      <h2 class="modal__title" id="stitle">GitHub 設定</h2>
+      <p style="font-size:var(--f3);color:var(--muted);margin-bottom:var(--s1);">
+        トークンはこのデバイスのみに保存されます（サーバー送信なし）
+      </p>
+      <form id="settings-form">
+        <div class="fg">
+          <label class="fl" for="cfg-token">Personal Access Token</label>
+          <input id="cfg-token" type="password" class="fi" placeholder="ghp_..." autocomplete="off" />
+        </div>
+        <div class="fg">
+          <label class="fl" for="cfg-owner">Owner</label>
+          <input id="cfg-owner" type="text" class="fi" placeholder="nekoojisan-labo" />
+        </div>
+        <div class="fg">
+          <label class="fl" for="cfg-repo">Repository</label>
+          <input id="cfg-repo" type="text" class="fi" placeholder="claude-task-manager" />
+        </div>
+        <div class="modal-btns">
+          <button type="button" class="btn-cancel" onclick="closeSettings()">キャンセル</button>
+          <button type="submit" class="btn-submit">保存して接続</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script defer>
-    /* Modal */
+    // ── Config ───────────────────────────────────────────────
+    const SETTINGS_KEY = 'ctm_settings';
+
+    function loadSettings() {
+      try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); }
+      catch { return {}; }
+    }
+
+    function saveSettings(s) {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+    }
+
+    // ── GitHub API ───────────────────────────────────────────
+    async function ghGet(path, token, owner, repo) {
+      const res = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${path}`,
+        { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' } }
+      );
+      if (!res.ok) throw new Error(`GitHub API ${res.status}: ${path}`);
+      const data = await res.json();
+      return {
+        content: JSON.parse(atob(data.content.replace(/\n/g, ''))),
+        sha: data.sha
+      };
+    }
+
+    async function ghPut(path, content, sha, message, token, owner, repo) {
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(content, null, 2))));
+      const res = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${path}`,
+        {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ message, content: encoded, sha })
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(`GitHub PUT ${res.status}: ${err.message || path}`);
+      }
+    }
+
+    // ── Task operations ──────────────────────────────────────
+    function makeTaskId() {
+      const d = new Date();
+      const ymd = d.toISOString().slice(0,10).replace(/-/g,'');
+      return `task_${ymd}_${String(d.getTime()).slice(-4)}`;
+    }
+
+    async function createTask(formData) {
+      const cfg = loadSettings();
+      if (!cfg.token) throw new Error('GitHub設定が未設定です。⚙ ボタンから設定してください。');
+      const { content: data, sha } = await ghGet('tasks.json', cfg.token, cfg.owner, cfg.repo);
+      const now = new Date().toISOString();
+      const task = {
+        id: makeTaskId(),
+        title: formData.title,
+        description: formData.description || '',
+        type: formData.type || 'other',
+        status: 'pending',
+        approval_required: formData.approval_required || false,
+        risk_level: null,
+        skill_match: null,
+        skill_status: null,
+        workflow_steps: [],
+        created_at: now,
+        updated_at: now,
+        executed_at: null,
+        result: null,
+        telegram_message_id: null
+      };
+      data.tasks.unshift(task);
+      await ghPut('tasks.json', data, sha, `feat: add task ${task.id}`, cfg.token, cfg.owner, cfg.repo);
+      return task;
+    }
+
+    // ── Board rendering ──────────────────────────────────────
+    const STATUS_COLS = ['pending','analyzing','waiting_approval','running','completed'];
+    const COL_IDS = {
+      pending: 'col-pending',
+      analyzing: 'col-analyzing',
+      waiting_approval: 'col-approval',
+      running: 'col-running',
+      completed: 'col-done'
+    };
+    const TAB_IDS = {
+      pending: 0, analyzing: 1, waiting_approval: 2, running: 3, completed: 4
+    };
+
+    function escHtml(s) {
+      return String(s).replace(/[&<>"']/g, c =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }
+
+    const RISK_CLASS = { low: 'rL', medium: 'rM', high: 'rH' };
+    const RISK_LABEL = { low: 'LOW', medium: 'MED', high: 'HIGH' };
+    const TYPE_CLASS = { automation: 'ba', development: 'bd', content: 'bc', research: 'br', memo: 'bm', other: 'bo' };
+    const TYPE_LABEL = { automation: '自動化', development: '開発', content: 'コンテンツ', research: 'リサーチ', memo: 'メモ', other: 'その他' };
+
+    function buildCard(task) {
+      const riskCls = RISK_CLASS[task.risk_level] || 'rL';
+      const riskLbl = RISK_LABEL[task.risk_level] || '—';
+      const typeCls = TYPE_CLASS[task.type] || 'bo';
+      const typeLbl = TYPE_LABEL[task.type] || task.type;
+      const isDone = task.status === 'completed';
+
+      return `<article class="card card--${task.risk_level === 'high' ? 'H' : task.risk_level === 'medium' ? 'M' : 'L'}${isDone ? ' card--done' : ''}" role="article" tabindex="0" ${isDone ? 'style="opacity:.68;"' : ''}>
+        <div class="card__meta">
+          <span class="badge ${typeCls}">${escHtml(typeLbl)}</span>
+          ${task.risk_level ? `<span class="risk ${riskCls}">${riskLbl}</span>` : ''}
+        </div>
+        <h2 class="card__title">${escHtml(task.title)}</h2>
+        ${task.description ? `<p style="font-size:var(--f3);color:var(--text2);margin:var(--s3) 0;line-height:1.5;">${escHtml(task.description.slice(0,120))}</p>` : ''}
+        <div class="card__foot">
+          <span class="card__skill${isDone ? ' card__skill--done' : ''}">${task.skill_match ? `🛠 ${escHtml(task.skill_match)}` : `📋 ${escHtml(typeLbl)}`}</span>
+          <span class="card__time">${formatDate(task.created_at)}</span>
+        </div>
+      </article>`;
+    }
+
+    function renderBoard(tasks) {
+      STATUS_COLS.forEach(status => {
+        const colId = COL_IDS[status];
+        const col = document.getElementById(colId);
+        if (!col) return;
+
+        // Keep the column header (.col__hd), replace everything after it
+        const hd = col.querySelector('.col__hd');
+        // Remove all article/card elements
+        col.querySelectorAll('article, .sbox, .appr').forEach(el => el.remove());
+
+        const filtered = tasks.filter(t => t.status === status);
+
+        // Update count in header
+        const countEl = hd?.querySelector('.col__n');
+        if (countEl) countEl.textContent = filtered.length;
+
+        // Add cards
+        filtered.forEach(task => {
+          col.insertAdjacentHTML('beforeend', buildCard(task));
+        });
+
+        if (filtered.length === 0) {
+          col.insertAdjacentHTML('beforeend', '<p style="font-size:var(--f3);color:var(--muted);padding:var(--s1) 0;text-align:center;">なし</p>');
+        }
+      });
+
+      // Update tab bar counts
+      document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+        const status = STATUS_COLS[i];
+        const countEl = btn.querySelector('.tab-btn__count');
+        if (countEl) countEl.textContent = tasks.filter(t => t.status === status).length;
+      });
+
+      // Update hero stats
+      updateHeroStats(tasks);
+
+      // Re-apply 3D tilt listeners
+      applyTiltListeners();
+    }
+
+    function updateHeroStats(tasks) {
+      const statsEl = document.querySelector('.hero__stats');
+      if (!statsEl) return;
+      const pending = tasks.filter(t => t.status === 'pending').length;
+      const approval = tasks.filter(t => t.status === 'waiting_approval').length;
+      const running = tasks.filter(t => t.status === 'running').length;
+      const done = tasks.filter(t => t.status === 'completed').length;
+      statsEl.innerHTML = `
+        <span class="stat"><span class="stat__d" style="background:#A78BFA;"></span>未着手 ${pending}</span>
+        ${approval > 0 ? `<span class="stat"><span class="stat__d pulse" style="background:#F87171;"></span>承認待ち ${approval}</span>` : ''}
+        ${running > 0 ? `<span class="stat"><span class="stat__d" style="background:#60A5FA;"></span>実行中 ${running}</span>` : ''}
+        <span class="stat"><span class="stat__d" style="background:#34D399;"></span>完了 ${done}</span>
+      `;
+    }
+
+    // ── Board loading ────────────────────────────────────────
+    async function loadBoard() {
+      const cfg = loadSettings();
+      if (!cfg.token) {
+        openSettings();
+        return;
+      }
+      try {
+        const { content } = await ghGet('tasks.json', cfg.token, cfg.owner, cfg.repo);
+        renderBoard(content.tasks || []);
+      } catch (e) {
+        showError('タスク読み込み失敗: ' + e.message);
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-banner');
+      if (el) { el.textContent = msg; el.hidden = false; setTimeout(() => { el.hidden = true; }, 6000); }
+    }
+
+    // ── Settings modal ───────────────────────────────────────
+    function openSettings() {
+      const cfg = loadSettings();
+      if (cfg.token) document.getElementById('cfg-token').value = cfg.token;
+      if (cfg.owner) document.getElementById('cfg-owner').value = cfg.owner;
+      if (cfg.repo)  document.getElementById('cfg-repo').value  = cfg.repo;
+      document.getElementById('settings-overlay').hidden = false;
+      setTimeout(() => document.getElementById('cfg-token').focus(), 50);
+    }
+
+    function closeSettings() { document.getElementById('settings-overlay').hidden = true; }
+    function closeSettingsOutside(e) { if (e.target.id === 'settings-overlay') closeSettings(); }
+
+    document.getElementById('settings-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const token = document.getElementById('cfg-token').value.trim();
+      const owner = document.getElementById('cfg-owner').value.trim();
+      const repo  = document.getElementById('cfg-repo').value.trim();
+      if (!token || !owner || !repo) return;
+      saveSettings({ token, owner, repo });
+      closeSettings();
+      await loadBoard();
+    });
+
+    // ── Task form ────────────────────────────────────────────
+    document.querySelector('.btn-submit')?.addEventListener('click', async e => {
+      if (e.target.closest('#settings-form')) return; // ignore settings form's submit button
+    });
+
+    // Wire up the task modal form
+    (function wireTaskForm() {
+      const submitBtn = document.querySelector('#modal .btn-submit');
+      if (!submitBtn) return;
+      submitBtn.addEventListener('click', async () => {
+        const title = document.getElementById('t-title')?.value?.trim();
+        if (!title) { document.getElementById('t-title')?.focus(); return; }
+        const desc   = document.getElementById('t-desc')?.value?.trim() || '';
+        const typeEl = document.getElementById('t-type');
+        const appr   = document.querySelector('#modal .appr-tog input')?.checked || false;
+
+        const TYPE_MAP = {
+          '自動化': 'automation', '開発': 'development',
+          'コンテンツ生成': 'content', 'リサーチ': 'research',
+          'メモ・アイデア': 'memo', 'その他': 'other'
+        };
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = '追加中…';
+        try {
+          await createTask({
+            title,
+            description: desc,
+            type: TYPE_MAP[typeEl?.value] || 'other',
+            approval_required: appr
+          });
+          // Reset form
+          document.getElementById('t-title').value = '';
+          document.getElementById('t-desc').value = '';
+          if (typeEl) typeEl.selectedIndex = 0;
+          if (document.querySelector('#modal .appr-tog input')) {
+            document.querySelector('#modal .appr-tog input').checked = false;
+          }
+          closeModal();
+          await loadBoard();
+        } catch (err) {
+          showError('タスク追加失敗: ' + err.message);
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = '登録する';
+        }
+      });
+    })();
+
+    // ── Modal helpers ────────────────────────────────────────
     function openModal() {
       document.getElementById('modal').hidden = false;
       setTimeout(() => document.getElementById('t-title').focus(), 50);
     }
     function closeModal() { document.getElementById('modal').hidden = true; }
     function closeOutside(e) { if (e.target.id === 'modal') closeModal(); }
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { closeModal(); closeSettings(); }
+    });
 
-    /* Mobile tab switching (K12: ARIA tabpanel) */
+    // ── Mobile tab switching (K12: ARIA tabpanel) ────────────
     const cols = ['pending','analyzing','approval','running','done'];
     function switchTab(btn, id) {
       cols.forEach(c => {
@@ -922,29 +1240,43 @@
       btn.setAttribute('aria-selected','true');
     }
 
-    /* Q5/Q7: 3D tilt on card hover — K19: throttled via rAF */
+    // ── 3D tilt (K19: rAF throttle) ─────────────────────────
     const TILT = 5;
     let ticking = false;
-    document.querySelectorAll('.card').forEach(card => {
-      card.addEventListener('mousemove', e => {
-        if (window.matchMedia('(prefers-reduced-motion:reduce)').matches) return;
-        if (!ticking) {
-          requestAnimationFrame(() => {
-            const r = card.getBoundingClientRect();
-            const x = (e.clientX - r.left) / r.width  - .5;
-            const y = (e.clientY - r.top)  / r.height - .5;
-            card.style.transform = `translateY(-3px) rotateY(${x*TILT}deg) rotateX(${-y*TILT}deg)`;
-            card.style.boxShadow = 'var(--sh-h)';
-            ticking = false;
-          });
-          ticking = true;
-        }
-      }, { passive: true }); /* K19: passive */
-      card.addEventListener('mouseleave', () => {
-        card.style.transform = '';
-        card.style.boxShadow = '';
+
+    function applyTiltListeners() {
+      document.querySelectorAll('.card').forEach(card => {
+        if (card.dataset.tiltBound) return;
+        card.dataset.tiltBound = '1';
+        card.addEventListener('mousemove', e => {
+          if (window.matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+          if (!ticking) {
+            requestAnimationFrame(() => {
+              const r = card.getBoundingClientRect();
+              const x = (e.clientX - r.left) / r.width  - .5;
+              const y = (e.clientY - r.top)  / r.height - .5;
+              card.style.transform = `translateY(-3px) rotateY(${x*TILT}deg) rotateX(${-y*TILT}deg)`;
+              card.style.boxShadow = 'var(--sh-h)';
+              ticking = false;
+            });
+            ticking = true;
+          }
+        }, { passive: true });
+        card.addEventListener('mouseleave', () => {
+          card.style.transform = '';
+          card.style.boxShadow = '';
+        });
       });
+    }
+
+    // ── Auto-polling ─────────────────────────────────────────
+    // Initial load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadBoard();
     });
+
+    // Refresh board every 30 seconds
+    setInterval(loadBoard, 30_000);
   </script>
 
 </body>
